@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:arxiv.org)",
+      "Bash(git -C \"C:\\\\codex\\\\automatic_arxiv_formatter\" status)",
+      "Bash(dir:*)",
+      "WebFetch(domain:developer.chrome.com)",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh:*)",
+      "Bash(git --version)",
+      "Bash(where:*)",
+      "Bash(python:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>ArXiv PDF Renamer</h1>
+    </header>
+
+    <div id="loading" class="state">
+      <div class="spinner"></div>
+      <p>Fetching paper title...</p>
+    </div>
+
+    <div id="result" class="state hidden">
+      <label for="title-input">Paper Title</label>
+      <input type="text" id="title-input" readonly>
+      <button id="download-btn">Download PDF</button>
+    </div>
+
+    <div id="error" class="state hidden">
+      <p id="error-msg" class="error-text"></p>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
