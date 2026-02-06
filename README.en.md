@@ -8,6 +8,8 @@ When downloading papers from ArXiv, files are saved with their ID as the filenam
 
 - Automatically extracts paper title from ArXiv abs/pdf pages
 - Downloads PDF using the title as the filename
+- **Date prefix support**: Prepend publication date in `[YYYY.MM]` or `[YY.MM]` format (e.g., `[2023.01] Attention Is All You Need.pdf`)
+- Prefix preference is saved automatically and persists across sessions
 - Supports modern format (`2301.07041`) and legacy format (`hep-th/9901001`)
 - Handles versioned URLs (`2301.07041v2`)
 
@@ -27,7 +29,11 @@ When downloading papers from ArXiv, files are saved with their ID as the filenam
 1. Navigate to an ArXiv paper page (abs or pdf).
 2. Click the ArXiv PDF Renamer icon in the browser toolbar.
 3. The paper title is automatically displayed.
-4. Click **Download PDF** to save the file with the paper title as the filename.
+4. Choose a date prefix format from the **Date Prefix** dropdown:
+   - `[YYYY.MM]` — e.g., `[2023.01] Paper Title.pdf` (default)
+   - `[YY.MM]` — e.g., `[23.01] Paper Title.pdf`
+   - `None` — title only, no date prefix
+5. Click **Download PDF** to save the file with the selected filename format.
 
 ## Supported URL Formats
 

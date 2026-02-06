@@ -5,9 +5,14 @@
   const errorMsg = document.getElementById("error-msg");
   const titleInput = document.getElementById("title-input");
   const downloadBtn = document.getElementById("download-btn");
+  const prefixSelect = document.getElementById("prefix-select");
+  const filenamePreview = document.getElementById("filename-preview");
+
+  const PREF_KEY = "arxiv_renamer_prefix";
 
   let pdfUrl = "";
   let sanitizedTitle = "";
+  let paperDate = null; // { year: "2023", month: "01" }
 
   function showError(msg) {
     loadingEl.classList.add("hidden");
@@ -65,6 +70,45 @@
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 200);
+  }
+
+  // Extract year and month from ArXiv ID
+  // Modern: "2301.07041" → { year: "2023", month: "01" }
+  // Legacy: "hep-th/9901001" → { year: "1999", month: "01" }
+  function extractDateFromId(id) {
+    // Modern format: first 4 digits are YYMM
+    const modern = id.match(/^(\d{2})(\d{2})\.\d{4,5}/);
+    if (modern) {
+      const yy = modern[1];
+      const mm = modern[2];
+      const year = (parseInt(yy, 10) >= 90 ? "19" : "20") + yy;
+      return { year, month: mm };
+    }
+    // Legacy format: category/YYMM...
+    const legacy = id.match(/[\w-]+\/(\d{2})(\d{2})\d{3}/);
+    if (legacy) {
+      const yy = legacy[1];
+      const mm = legacy[2];
+      const year = (parseInt(yy, 10) >= 90 ? "19" : "20") + yy;
+      return { year, month: mm };
+    }
+    return null;
+  }
+
+  // Build filename with optional date prefix
+  function buildFilename(title, date, prefixFormat) {
+    if (!date || prefixFormat === "none") return title + ".pdf";
+    if (prefixFormat === "YY.MM") {
+      return `[${date.year.slice(2)}.${date.month}] ${title}.pdf`;
+    }
+    // Default: YYYY.MM
+    return `[${date.year}.${date.month}] ${title}.pdf`;
+  }
+
+  function updatePreview() {
+    if (!sanitizedTitle) return;
+    const fmt = prefixSelect.value;
+    filenamePreview.textContent = buildFilename(sanitizedTitle, paperDate, fmt);
   }
 
   // Extract title from an abs page by injecting a script into the tab
@@ -136,6 +180,9 @@
     const baseId = parsed.id.replace(/v\d+$/, "");
     pdfUrl = `https://arxiv.org/pdf/${baseId}.pdf`;
 
+    // Extract date from ArXiv ID
+    paperDate = extractDateFromId(parsed.id);
+
     let title;
     if (parsed.type === "abs") {
       title = await extractTitleFromAbsPage(tab.id);
@@ -151,20 +198,33 @@
       return;
     }
 
+    // Restore saved prefix preference
+    const saved = await chrome.storage.local.get(PREF_KEY);
+    if (saved[PREF_KEY]) prefixSelect.value = saved[PREF_KEY];
+
     showResult(sanitizedTitle);
+    updatePreview();
   } catch (err) {
     showError(err.message || "An unexpected error occurred.");
   }
+
+  // Save preference and update preview when prefix format changes
+  prefixSelect.addEventListener("change", () => {
+    chrome.storage.local.set({ [PREF_KEY]: prefixSelect.value });
+    updatePreview();
+  });
 
   // Download button handler
   downloadBtn.addEventListener("click", () => {
     if (!pdfUrl || !sanitizedTitle) return;
 
+    const filename = buildFilename(sanitizedTitle, paperDate, prefixSelect.value);
+
     downloadBtn.disabled = true;
     downloadBtn.textContent = "Starting download...";
 
     chrome.runtime.sendMessage(
-      { action: "download", url: pdfUrl, filename: sanitizedTitle + ".pdf" },
+      { action: "download", url: pdfUrl, filename },
       (response) => {
         if (chrome.runtime.lastError || !response?.success) {
           downloadBtn.disabled = false;

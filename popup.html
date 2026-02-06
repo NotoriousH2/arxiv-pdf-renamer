@@ -18,6 +18,19 @@
     <div id="result" class="state hidden">
       <label for="title-input">Paper Title</label>
       <input type="text" id="title-input" readonly>
+
+      <div class="prefix-row">
+        <label for="prefix-select">Date Prefix</label>
+        <select id="prefix-select">
+          <option value="YYYY.MM">[YYYY.MM] (e.g. [2023.01])</option>
+          <option value="YY.MM">[YY.MM] (e.g. [23.01])</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+
+      <label>Filename Preview</label>
+      <div id="filename-preview" class="filename-preview"></div>
+
       <button id="download-btn">Download PDF</button>
     </div>
 
