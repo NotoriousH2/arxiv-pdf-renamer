@@ -4,6 +4,8 @@
 
 When downloading papers from ArXiv, files are saved with their ID as the filename (e.g., `2301.07041.pdf`). This Chrome extension lets you save PDFs with the paper's **actual title** as the filename.
 
+![Usage Example](example.png)
+
 ## Features
 
 - Automatically extracts paper title from ArXiv abs/pdf pages
