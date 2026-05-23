@@ -21,7 +21,7 @@ ArXiv에서 논문 PDF를 다운로드하면 파일명이 코드번호(예: `230
 
 1. 이 저장소를 클론합니다:
    ```
-   git clone https://github.com/YOUR_USERNAME/arxiv-pdf-renamer.git
+   git clone https://github.com/NotoriousH2/arxiv-pdf-renamer.git
    ```
 2. Chrome에서 `chrome://extensions`로 이동합니다.
 3. 우측 상단의 **개발자 모드**를 켭니다.
