@@ -76,12 +76,16 @@ label {
   margin-bottom: 12px;
 }
 
-/* Prefix select */
-.prefix-row {
+/* Filename template */
+.template-row {
   margin-bottom: 12px;
 }
 
-#prefix-select {
+#template-select,
+#version-select,
+#conflict-select,
+#save-mode-select,
+#custom-template {
   width: 100%;
   padding: 6px 8px;
   border: 1px solid #ddd;
@@ -90,6 +94,52 @@ label {
   background: #fff;
   color: #333;
   cursor: pointer;
+}
+
+.save-location-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 5px;
+  color: #777;
+  font-size: 10px;
+}
+
+.small-button {
+  padding: 3px 7px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  color: #555;
+  background: #f4f4f4;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.history-status {
+  padding: 7px 9px;
+  margin: -4px 0 12px;
+  border-radius: 4px;
+  background: #f4f4f4;
+  color: #666;
+  font-size: 11px;
+}
+
+#custom-template {
+  cursor: text;
+}
+
+.token-help {
+  margin-top: 5px;
+  color: #777;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.field-error {
+  margin-top: 5px;
+  color: #b31b1b;
+  font-size: 11px;
 }
 
 .filename-preview {
@@ -104,7 +154,8 @@ label {
   word-break: break-all;
 }
 
-#download-btn {
+#download-btn,
+#batch-download-btn {
   width: 100%;
   padding: 10px;
   background: #b31b1b;
@@ -117,12 +168,82 @@ label {
   transition: background 0.15s;
 }
 
-#download-btn:hover {
+#download-btn:hover,
+#batch-download-btn:hover {
   background: #8c1515;
 }
 
-#download-btn:active {
+#download-btn:active,
+#batch-download-btn:active {
   background: #6e1010;
+}
+
+#download-btn:disabled,
+#batch-download-btn:disabled {
+  background: #aaa;
+  cursor: not-allowed;
+}
+
+/* Batch download */
+.batch-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: #666;
+  font-size: 11px;
+}
+
+.checkbox-label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0;
+  cursor: pointer;
+}
+
+.batch-list {
+  max-height: 330px;
+  margin-bottom: 12px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.batch-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.batch-item:last-child {
+  border-bottom: none;
+}
+
+.batch-item input {
+  margin-top: 2px;
+}
+
+.batch-item-title {
+  display: block;
+  color: #333;
+}
+
+.batch-item-id {
+  display: block;
+  color: #888;
+  font-family: "Consolas", "Courier New", monospace;
+}
+
+.batch-progress {
+  margin-bottom: 8px;
+  color: #555;
+  font-size: 11px;
+  text-align: center;
 }
 
 /* Error */

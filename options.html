@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ArXiv PDF Renamer Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <h1>ArXiv PDF Renamer</h1>
+    <section>
+      <h2>Save Location</h2>
+      <p>
+        Choose a folder once to save future papers there without returning to
+        the Downloads folder.
+      </p>
+      <label for="save-mode">Download behavior</label>
+      <select id="save-mode">
+        <option value="ask">Ask where to save each paper</option>
+        <option value="folder">Save directly to a chosen folder</option>
+      </select>
+      <div class="folder-card">
+        <span id="folder-name">No folder selected</span>
+        <div>
+          <button id="choose-folder">Choose Folder</button>
+          <button id="clear-folder" class="secondary">Clear</button>
+        </div>
+      </div>
+      <p id="status" role="status"></p>
+      <p class="note">
+        Chrome may ask you to approve the folder again after a browser restart.
+        Only the folder handle is stored locally; the extension does not upload
+        its path or contents.
+      </p>
+    </section>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

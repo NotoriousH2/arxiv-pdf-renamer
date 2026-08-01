@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "ArXiv PDF Renamer",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Download ArXiv papers with their actual title as filename",
   "permissions": [
     "activeTab",
+    "contextMenus",
     "scripting",
     "downloads",
     "storage"
@@ -21,8 +22,19 @@
       "128": "icons/icon128.png"
     }
   },
+  "options_page": "options.html",
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "commands": {
+    "download-paper": {
+      "suggested_key": {
+        "default": "Alt+Shift+D",
+        "mac": "Alt+Shift+D"
+      },
+      "description": "Download the current ArXiv paper with its title"
+    }
   },
   "icons": {
     "16": "icons/icon16.png",
