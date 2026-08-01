@@ -5,6 +5,11 @@ import {
   getUnknownTokens,
   templateFromLegacyPrefix,
 } from "./lib/filename.js";
+import {
+  extractDateFromId,
+  parseArxivUrl,
+  parseMetadataFromHtml,
+} from "./lib/arxiv.js";
 
 (async function () {
   const loadingEl = document.getElementById("loading");
@@ -40,57 +45,10 @@ import {
     titleInput.value = title;
   }
 
-  function parseArxivUrl(url) {
-    try {
-      const parsedUrl = new URL(url);
-      if (!parsedUrl.hostname.endsWith("arxiv.org")) return null;
-
-      const modern = parsedUrl.pathname.match(
-        /^\/(abs|pdf)\/(\d{4}\.\d{4,5})(v\d+)?(\.pdf)?$/
-      );
-      if (modern) {
-        return {
-          id: modern[2] + (modern[3] || ""),
-          type: modern[1],
-        };
-      }
-
-      const legacy = parsedUrl.pathname.match(
-        /^\/(abs|pdf)\/([\w-]+\/\d{7})(v\d+)?(\.pdf)?$/
-      );
-      if (legacy) {
-        return {
-          id: legacy[2] + (legacy[3] || ""),
-          type: legacy[1],
-        };
-      }
-
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
   function decodeHtmlEntities(value) {
     const textarea = document.createElement("textarea");
     textarea.innerHTML = value;
     return textarea.value;
-  }
-
-  function extractDateFromId(id) {
-    const modern = id.match(/^(\d{2})(\d{2})\.\d{4,5}/);
-    if (modern) {
-      const yearPrefix = parseInt(modern[1], 10) >= 90 ? "19" : "20";
-      return { year: yearPrefix + modern[1], month: modern[2] };
-    }
-
-    const legacy = id.match(/[\w-]+\/(\d{2})(\d{2})\d{3}/);
-    if (legacy) {
-      const yearPrefix = parseInt(legacy[1], 10) >= 90 ? "19" : "20";
-      return { year: yearPrefix + legacy[1], month: legacy[2] };
-    }
-
-    return null;
   }
 
   function selectedTemplate() {
@@ -167,30 +125,8 @@ import {
       throw new Error(`Failed to fetch abstract page (HTTP ${response.status}).`);
     }
     const html = await response.text();
-    const citationMatch = html.match(
-      /<meta\s+name="citation_title"\s+content="([^"]+)"/i
-    );
-    const ogMatch = html.match(
-      /<meta\s+property="og:title"\s+content="([^"]+)"/i
-    );
-    const authorMatches = [
-      ...html.matchAll(
-        /<meta\s+name="citation_author"\s+content="([^"]+)"/gi
-      ),
-    ];
-    const title = citationMatch?.[1] || ogMatch?.[1];
-
-    if (!title) {
-      throw new Error("Could not find paper title in abstract page.");
-    }
-
-    return {
-      title: decodeHtmlEntities(title),
-      authors: authorMatches.map((match) =>
-        decodeHtmlEntities(match[1])
-      ),
-      category: "",
-    };
+    const parsed = parseArxivUrl(absUrl);
+    return parseMetadataFromHtml(html, parsed.id);
   }
 
   templateSelect.addEventListener("change", () => {

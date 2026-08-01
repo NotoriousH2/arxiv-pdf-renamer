@@ -5,6 +5,7 @@
   "description": "Download ArXiv papers with their actual title as filename",
   "permissions": [
     "activeTab",
+    "contextMenus",
     "scripting",
     "downloads",
     "storage"
@@ -22,7 +23,17 @@
     }
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "commands": {
+    "download-paper": {
+      "suggested_key": {
+        "default": "Alt+Shift+D",
+        "mac": "Alt+Shift+D"
+      },
+      "description": "Download the current ArXiv paper with its title"
+    }
   },
   "icons": {
     "16": "icons/icon16.png",
