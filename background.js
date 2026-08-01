@@ -8,6 +8,7 @@ import {
   buildFilename,
   templateFromLegacyPrefix,
 } from "./lib/filename.js";
+import { MAX_BATCH_SIZE } from "./lib/batch.js";
 
 const PAGE_MENU_ID = "download-arxiv-page";
 const LINK_MENU_ID = "download-arxiv-link";
@@ -26,22 +27,61 @@ async function getStoredTemplate() {
   );
 }
 
-async function startDownload(url, filename) {
+async function startDownload(url, filename, { saveAs = true } = {}) {
   return chrome.downloads.download({
     url,
     filename,
-    saveAs: true,
+    saveAs,
     conflictAction: "uniquify",
   });
 }
 
-async function downloadArxivUrl(url) {
+async function downloadArxivUrl(url, options = {}) {
   const parsed = parseArxivUrl(url);
   if (!parsed) throw new Error("This is not a supported ArXiv paper URL.");
 
   const metadata = await fetchPaperMetadata(parsed.id);
   const template = await getStoredTemplate();
-  return startDownload(getPdfUrl(parsed.id), buildFilename(metadata, template));
+  return startDownload(
+    getPdfUrl(parsed.id),
+    buildFilename(metadata, template),
+    options
+  );
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function downloadBatch(items) {
+  const queue = items.slice(0, MAX_BATCH_SIZE);
+  const failures = [];
+  let completed = 0;
+
+  for (const [index, item] of queue.entries()) {
+    await chrome.runtime
+      .sendMessage({
+        action: "batchProgress",
+        current: index + 1,
+        total: queue.length,
+        id: item.id,
+      })
+      .catch(() => {});
+
+    try {
+      await downloadArxivUrl(item.url, { saveAs: false });
+      completed += 1;
+    } catch (error) {
+      failures.push({
+        id: item.id,
+        error: error.message || "Download failed",
+      });
+    }
+
+    if (index < queue.length - 1) await delay(500);
+  }
+
+  return { success: true, completed, failures };
 }
 
 async function showActionStatus(text, color, title) {
@@ -101,12 +141,29 @@ chrome.commands.onCommand.addListener((command, tab) => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message.action !== "download") return false;
+  if (message.action === "download") {
+    startDownload(message.url, message.filename)
+      .then((downloadId) => sendResponse({ success: true, downloadId }))
+      .catch((error) =>
+        sendResponse({
+          success: false,
+          error: error.message || "Download failed",
+        })
+      );
+    return true;
+  }
 
-  startDownload(message.url, message.filename)
-    .then((downloadId) => sendResponse({ success: true, downloadId }))
-    .catch((error) =>
-      sendResponse({ success: false, error: error.message || "Download failed" })
-    );
-  return true;
+  if (message.action === "downloadBatch") {
+    downloadBatch(message.items || [])
+      .then(sendResponse)
+      .catch((error) =>
+        sendResponse({
+          success: false,
+          error: error.message || "Batch download failed",
+        })
+      );
+    return true;
+  }
+
+  return false;
 });

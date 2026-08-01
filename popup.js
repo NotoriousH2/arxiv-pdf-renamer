@@ -10,11 +10,16 @@ import {
   parseArxivUrl,
   parseMetadataFromHtml,
 } from "./lib/arxiv.js";
+import {
+  buildBatchCandidates,
+  selectBatchItems,
+} from "./lib/batch.js";
 
 (async function () {
   const loadingEl = document.getElementById("loading");
   const resultEl = document.getElementById("result");
   const errorEl = document.getElementById("error");
+  const batchResultEl = document.getElementById("batch-result");
   const errorMsg = document.getElementById("error-msg");
   const titleInput = document.getElementById("title-input");
   const downloadBtn = document.getElementById("download-btn");
@@ -23,6 +28,11 @@ import {
   const customTemplateInput = document.getElementById("custom-template");
   const templateError = document.getElementById("template-error");
   const filenamePreview = document.getElementById("filename-preview");
+  const batchSelectAll = document.getElementById("batch-select-all");
+  const batchSummary = document.getElementById("batch-summary");
+  const batchList = document.getElementById("batch-list");
+  const batchProgress = document.getElementById("batch-progress");
+  const batchDownloadBtn = document.getElementById("batch-download-btn");
 
   const LEGACY_PREF_KEY = "arxiv_renamer_prefix";
   const TEMPLATE_KEY = "arxiv_renamer_template";
@@ -30,10 +40,12 @@ import {
 
   let pdfUrl = "";
   let paperMetadata = null;
+  let batchCandidates = [];
 
   function showError(message) {
     loadingEl.classList.add("hidden");
     resultEl.classList.add("hidden");
+    batchResultEl.classList.add("hidden");
     errorEl.classList.remove("hidden");
     errorMsg.textContent = message;
   }
@@ -41,8 +53,53 @@ import {
   function showResult(title) {
     loadingEl.classList.add("hidden");
     errorEl.classList.add("hidden");
+    batchResultEl.classList.add("hidden");
     resultEl.classList.remove("hidden");
     titleInput.value = title;
+  }
+
+  function updateBatchSelection() {
+    const checkboxes = [
+      ...batchList.querySelectorAll('input[type="checkbox"]'),
+    ];
+    const selectedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+    batchSummary.textContent = `${selectedCount} of ${checkboxes.length} selected`;
+    batchSelectAll.checked =
+      checkboxes.length > 0 && selectedCount === checkboxes.length;
+    batchSelectAll.indeterminate =
+      selectedCount > 0 && selectedCount < checkboxes.length;
+    batchDownloadBtn.disabled = selectedCount === 0;
+  }
+
+  function showBatchResult(candidates) {
+    batchCandidates = candidates;
+    loadingEl.classList.add("hidden");
+    resultEl.classList.add("hidden");
+    errorEl.classList.add("hidden");
+    batchResultEl.classList.remove("hidden");
+    batchList.replaceChildren();
+
+    for (const candidate of candidates) {
+      const row = document.createElement("label");
+      row.className = "batch-item";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = candidate.id;
+      checkbox.checked = true;
+
+      const details = document.createElement("span");
+      const title = document.createElement("span");
+      title.className = "batch-item-title";
+      title.textContent = candidate.title;
+      const id = document.createElement("span");
+      id.className = "batch-item-id";
+      id.textContent = candidate.id;
+      details.append(title, id);
+      row.append(checkbox, details);
+      batchList.append(row);
+    }
+
+    updateBatchSelection();
   }
 
   function decodeHtmlEntities(value) {
@@ -129,6 +186,28 @@ import {
     return parseMetadataFromHtml(html, parsed.id);
   }
 
+  async function extractBatchCandidatesFromPage(tabId) {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () =>
+        Array.from(
+          document.querySelectorAll('a[href*="/abs/"], a[href*="/pdf/"]')
+        ).map((anchor) => {
+          const searchResult = anchor.closest("li.arxiv-result");
+          const listDetails = anchor.closest("dt")?.nextElementSibling;
+          const titleElement =
+            searchResult?.querySelector(".title") ||
+            listDetails?.querySelector(".list-title");
+          return {
+            url: anchor.href,
+            title: titleElement?.textContent || "",
+          };
+        }),
+    });
+
+    return buildBatchCandidates(results?.[0]?.result || []);
+  }
+
   templateSelect.addEventListener("change", () => {
     customTemplateRow.classList.toggle(
       "hidden",
@@ -144,6 +223,55 @@ import {
       [CUSTOM_TEMPLATE_KEY]: customTemplateInput.value,
     });
     updatePreview();
+  });
+
+  batchSelectAll.addEventListener("change", () => {
+    for (const checkbox of batchList.querySelectorAll(
+      'input[type="checkbox"]'
+    )) {
+      checkbox.checked = batchSelectAll.checked;
+    }
+    updateBatchSelection();
+  });
+
+  batchList.addEventListener("change", updateBatchSelection);
+
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.action !== "batchProgress") return;
+    batchProgress.classList.remove("hidden");
+    batchProgress.textContent =
+      `Downloading ${message.current} of ${message.total}: ${message.id}`;
+  });
+
+  batchDownloadBtn.addEventListener("click", () => {
+    const selectedIds = [
+      ...batchList.querySelectorAll('input[type="checkbox"]:checked'),
+    ].map((checkbox) => checkbox.value);
+    const selectedItems = selectBatchItems(batchCandidates, selectedIds);
+    if (!selectedItems.length) return;
+
+    batchDownloadBtn.disabled = true;
+    batchDownloadBtn.textContent = "Starting batch...";
+    batchProgress.classList.remove("hidden");
+    batchProgress.textContent = "Preparing downloads...";
+
+    chrome.runtime.sendMessage(
+      { action: "downloadBatch", items: selectedItems },
+      (response) => {
+        if (chrome.runtime.lastError || !response?.success) {
+          batchProgress.textContent =
+            response?.error || "Batch download failed.";
+          batchDownloadBtn.disabled = false;
+          batchDownloadBtn.textContent = "Retry Selected";
+          return;
+        }
+
+        batchProgress.textContent =
+          `Finished: ${response.completed} downloaded, ` +
+          `${response.failures.length} failed.`;
+        batchDownloadBtn.textContent = "Batch Complete";
+      }
+    );
   });
 
   downloadBtn.addEventListener("click", () => {
@@ -177,7 +305,12 @@ import {
 
     const parsed = parseArxivUrl(tab.url);
     if (!parsed) {
-      showError("This is not an ArXiv paper page.");
+      const candidates = await extractBatchCandidatesFromPage(tab.id);
+      if (candidates.length) {
+        showBatchResult(candidates);
+      } else {
+        showError("No ArXiv papers were found on this page.");
+      }
       return;
     }
 

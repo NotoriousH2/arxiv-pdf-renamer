@@ -12,7 +12,7 @@
 
     <div id="loading" class="state">
       <div class="spinner"></div>
-      <p>Fetching paper title...</p>
+      <p>Inspecting ArXiv page...</p>
     </div>
 
     <div id="result" class="state hidden">
@@ -47,6 +47,19 @@
       <div id="filename-preview" class="filename-preview"></div>
 
       <button id="download-btn">Download PDF</button>
+    </div>
+
+    <div id="batch-result" class="state hidden">
+      <div class="batch-header">
+        <label class="checkbox-label">
+          <input type="checkbox" id="batch-select-all" checked>
+          Select all
+        </label>
+        <span id="batch-summary"></span>
+      </div>
+      <div id="batch-list" class="batch-list"></div>
+      <p id="batch-progress" class="batch-progress hidden"></p>
+      <button id="batch-download-btn">Download Selected</button>
     </div>
 
     <div id="error" class="state hidden">
