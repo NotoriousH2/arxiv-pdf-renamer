@@ -39,6 +39,10 @@ test("extracts dates and builds a clean PDF URL", () => {
     getPdfUrl("2301.07041v2"),
     "https://arxiv.org/pdf/2301.07041.pdf"
   );
+  assert.equal(
+    getPdfUrl("2301.07041v2", "current"),
+    "https://arxiv.org/pdf/2301.07041v2.pdf"
+  );
 });
 
 test("parses title, authors, category, and entities from HTML", () => {

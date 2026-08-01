@@ -7,6 +7,7 @@ import {
 } from "./lib/filename.js";
 import {
   extractDateFromId,
+  getPdfUrl,
   parseArxivUrl,
 } from "./lib/arxiv.js";
 import { getPaperMetadata } from "./lib/metadata-cache.js";
@@ -14,6 +15,14 @@ import {
   buildBatchCandidates,
   selectBatchItems,
 } from "./lib/batch.js";
+import {
+  CONFLICT_ACTION_KEY,
+  DOWNLOAD_HISTORY_KEY,
+  VERSION_MODE_KEY,
+  findLatestHistory,
+  resolveDownloadId,
+  splitArxivId,
+} from "./lib/history.js";
 
 (async function () {
   const loadingEl = document.getElementById("loading");
@@ -22,6 +31,12 @@ import {
   const batchResultEl = document.getElementById("batch-result");
   const errorMsg = document.getElementById("error-msg");
   const titleInput = document.getElementById("title-input");
+  const downloadStatus = document.getElementById("download-status");
+  const versionSelect = document.getElementById("version-select");
+  const currentVersionOption = document.getElementById(
+    "current-version-option"
+  );
+  const conflictSelect = document.getElementById("conflict-select");
   const downloadBtn = document.getElementById("download-btn");
   const templateSelect = document.getElementById("template-select");
   const customTemplateRow = document.getElementById("custom-template-row");
@@ -40,6 +55,7 @@ import {
 
   let pdfUrl = "";
   let paperMetadata = null;
+  let parsedPaper = null;
   let batchCandidates = [];
 
   function showError(message) {
@@ -135,6 +151,35 @@ import {
     filenamePreview.textContent = buildFilename(paperMetadata, template);
   }
 
+  function refreshDownloadTarget() {
+    if (!parsedPaper || !paperMetadata) return;
+    const versionMode = versionSelect.value;
+    const arxivId = resolveDownloadId(parsedPaper.id, versionMode);
+    pdfUrl = getPdfUrl(parsedPaper.id, versionMode);
+    paperMetadata = { ...paperMetadata, arxivId };
+    updatePreview();
+  }
+
+  function showDownloadHistory(history) {
+    const latest = findLatestHistory(history, parsedPaper.id);
+    if (!latest) {
+      downloadStatus.textContent = "No previous download recorded.";
+      return;
+    }
+
+    const { version } = splitArxivId(latest.arxivId);
+    const versionText = version === null ? "latest" : `v${version}`;
+    const date = new Date(latest.startedAt).toLocaleDateString();
+    const stateText =
+      latest.state === "complete"
+        ? "downloaded"
+        : latest.state === "interrupted"
+          ? "failed"
+          : "started";
+    downloadStatus.textContent =
+      `Previously ${stateText}: ${versionText} on ${date}`;
+  }
+
   async function extractMetadataFromAbsPage(tabId) {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
@@ -215,6 +260,17 @@ import {
     updatePreview();
   });
 
+  versionSelect.addEventListener("change", () => {
+    chrome.storage.local.set({ [VERSION_MODE_KEY]: versionSelect.value });
+    refreshDownloadTarget();
+  });
+
+  conflictSelect.addEventListener("change", () => {
+    chrome.storage.local.set({
+      [CONFLICT_ACTION_KEY]: conflictSelect.value,
+    });
+  });
+
   batchSelectAll.addEventListener("change", () => {
     for (const checkbox of batchList.querySelectorAll(
       'input[type="checkbox"]'
@@ -272,7 +328,15 @@ import {
     downloadBtn.textContent = "Starting download...";
 
     chrome.runtime.sendMessage(
-      { action: "download", url: pdfUrl, filename },
+      {
+        action: "download",
+        url: pdfUrl,
+        filename,
+        arxivId: paperMetadata.arxivId,
+        requestedId: parsedPaper.id,
+        versionMode: versionSelect.value,
+        conflictAction: conflictSelect.value,
+      },
       (response) => {
         if (chrome.runtime.lastError || !response?.success) {
           downloadBtn.disabled = false;
@@ -303,9 +367,9 @@ import {
       }
       return;
     }
+    parsedPaper = parsed;
 
-    const baseId = parsed.id.replace(/v\d+$/, "");
-    pdfUrl = `https://arxiv.org/pdf/${baseId}.pdf`;
+    pdfUrl = getPdfUrl(parsed.id);
     const paperDate = extractDateFromId(parsed.id);
     let extractedMetadata;
     if (parsed.type === "abs") {
@@ -337,6 +401,9 @@ import {
       TEMPLATE_KEY,
       CUSTOM_TEMPLATE_KEY,
       LEGACY_PREF_KEY,
+      VERSION_MODE_KEY,
+      CONFLICT_ACTION_KEY,
+      DOWNLOAD_HISTORY_KEY,
     ]);
     const storedTemplate =
       saved[TEMPLATE_KEY] ||
@@ -352,6 +419,15 @@ import {
       "hidden",
       templateSelect.value !== "custom"
     );
+    versionSelect.value = saved[VERSION_MODE_KEY] || "latest";
+    conflictSelect.value = saved[CONFLICT_ACTION_KEY] || "uniquify";
+    const { version } = splitArxivId(parsed.id);
+    currentVersionOption.textContent =
+      version === null
+        ? "Version from current URL (unversioned)"
+        : `Version from current URL (v${version})`;
+    refreshDownloadTarget();
+    showDownloadHistory(saved[DOWNLOAD_HISTORY_KEY] || []);
 
     showResult(paperMetadata.title);
     updatePreview();

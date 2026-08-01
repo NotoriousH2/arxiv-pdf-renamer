@@ -82,6 +82,8 @@ label {
 }
 
 #template-select,
+#version-select,
+#conflict-select,
 #custom-template {
   width: 100%;
   padding: 6px 8px;
@@ -91,6 +93,15 @@ label {
   background: #fff;
   color: #333;
   cursor: pointer;
+}
+
+.history-status {
+  padding: 7px 9px;
+  margin: -4px 0 12px;
+  border-radius: 4px;
+  background: #f4f4f4;
+  color: #666;
+  font-size: 11px;
 }
 
 #custom-template {

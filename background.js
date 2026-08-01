@@ -9,31 +9,77 @@ import {
   templateFromLegacyPrefix,
 } from "./lib/filename.js";
 import { MAX_BATCH_SIZE } from "./lib/batch.js";
+import {
+  CONFLICT_ACTION_KEY,
+  DOWNLOAD_HISTORY_KEY,
+  VERSION_MODE_KEY,
+  addHistoryRecord,
+  resolveDownloadId,
+  updateHistoryRecord,
+} from "./lib/history.js";
 
 const PAGE_MENU_ID = "download-arxiv-page";
 const LINK_MENU_ID = "download-arxiv-link";
 const TEMPLATE_KEY = "arxiv_renamer_template";
 const LEGACY_PREF_KEY = "arxiv_renamer_prefix";
 
-async function getStoredTemplate() {
+async function getStoredPreferences() {
   const saved = await chrome.storage.local.get([
     TEMPLATE_KEY,
     LEGACY_PREF_KEY,
+    VERSION_MODE_KEY,
+    CONFLICT_ACTION_KEY,
   ]);
-  return (
-    saved[TEMPLATE_KEY] ||
-    templateFromLegacyPrefix(saved[LEGACY_PREF_KEY]) ||
-    DEFAULT_TEMPLATE
-  );
+  return {
+    template:
+      saved[TEMPLATE_KEY] ||
+      templateFromLegacyPrefix(saved[LEGACY_PREF_KEY]) ||
+      DEFAULT_TEMPLATE,
+    versionMode: saved[VERSION_MODE_KEY] || "latest",
+    conflictAction: saved[CONFLICT_ACTION_KEY] || "uniquify",
+  };
 }
 
-async function startDownload(url, filename, { saveAs = true } = {}) {
-  return chrome.downloads.download({
+let historyWriteQueue = Promise.resolve();
+
+function mutateHistory(mutator) {
+  historyWriteQueue = historyWriteQueue.catch(() => {}).then(async () => {
+    const saved = await chrome.storage.local.get(DOWNLOAD_HISTORY_KEY);
+    const history = mutator(saved[DOWNLOAD_HISTORY_KEY] || []);
+    await chrome.storage.local.set({ [DOWNLOAD_HISTORY_KEY]: history });
+    return history;
+  });
+  return historyWriteQueue;
+}
+
+async function startDownload(
+  url,
+  filename,
+  {
+    saveAs = true,
+    conflictAction = "uniquify",
+    historyContext = null,
+  } = {}
+) {
+  const downloadId = await chrome.downloads.download({
     url,
     filename,
     saveAs,
-    conflictAction: "uniquify",
+    conflictAction,
   });
+
+  if (historyContext) {
+    await mutateHistory((history) =>
+      addHistoryRecord(history, {
+        downloadId,
+        filename,
+        startedAt: Date.now(),
+        state: "in_progress",
+        ...historyContext,
+      })
+    ).catch(() => {});
+  }
+  return downloadId;
 }
 
 async function downloadArxivUrl(url, options = {}) {
@@ -41,11 +87,20 @@ async function downloadArxivUrl(url, options = {}) {
   if (!parsed) throw new Error("This is not a supported ArXiv paper URL.");
 
   const metadata = await getPaperMetadata(parsed.id);
-  const template = await getStoredTemplate();
+  const preferences = await getStoredPreferences();
+  const arxivId = resolveDownloadId(parsed.id, preferences.versionMode);
   return startDownload(
-    getPdfUrl(parsed.id),
-    buildFilename(metadata, template),
-    options
+    getPdfUrl(parsed.id, preferences.versionMode),
+    buildFilename({ ...metadata, arxivId }, preferences.template),
+    {
+      ...options,
+      conflictAction: preferences.conflictAction,
+      historyContext: {
+        arxivId,
+        requestedId: parsed.id,
+        versionMode: preferences.versionMode,
+      },
+    }
   );
 }
 
@@ -140,9 +195,31 @@ chrome.commands.onCommand.addListener((command, tab) => {
   }
 });
 
+chrome.downloads.onChanged.addListener((delta) => {
+  const state = delta.state?.current;
+  if (state !== "complete" && state !== "interrupted") return;
+
+  mutateHistory((history) =>
+    updateHistoryRecord(history, delta.id, {
+      state,
+      completedAt: Date.now(),
+      error: delta.error?.current || null,
+    })
+  ).catch(() => {});
+});
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "download") {
-    startDownload(message.url, message.filename)
+    startDownload(message.url, message.filename, {
+      conflictAction: message.conflictAction || "uniquify",
+      historyContext: message.arxivId
+        ? {
+            arxivId: message.arxivId,
+            requestedId: message.requestedId || message.arxivId,
+            versionMode: message.versionMode || "latest",
+          }
+        : null,
+    })
       .then((downloadId) => sendResponse({ success: true, downloadId }))
       .catch((error) =>
         sendResponse({

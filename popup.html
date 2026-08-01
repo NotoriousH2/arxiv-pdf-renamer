@@ -18,6 +18,26 @@
     <div id="result" class="state hidden">
       <label for="title-input">Paper Title</label>
       <input type="text" id="title-input" readonly>
+      <p id="download-status" class="history-status"></p>
+
+      <div class="template-row">
+        <label for="version-select">PDF Version</label>
+        <select id="version-select">
+          <option value="latest">Latest available version</option>
+          <option id="current-version-option" value="current">
+            Version from current URL
+          </option>
+        </select>
+      </div>
+
+      <div class="template-row">
+        <label for="conflict-select">If Filename Exists</label>
+        <select id="conflict-select">
+          <option value="uniquify">Keep both files</option>
+          <option value="overwrite">Overwrite existing file</option>
+          <option value="prompt">Ask each time</option>
+        </select>
+      </div>
 
       <div class="template-row">
         <label for="template-select">Filename Format</label>
