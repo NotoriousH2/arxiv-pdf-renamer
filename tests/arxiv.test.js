@@ -6,6 +6,7 @@ import {
   fetchPaperMetadata,
   getPdfUrl,
   parseArxivUrl,
+  parseMetadataFromAtom,
   parseMetadataFromHtml,
 } from "../lib/arxiv.js";
 
@@ -58,10 +59,78 @@ test("parses title, authors, category, and entities from HTML", () => {
 });
 
 test("fetches an abstract page through the supplied fetch function", async () => {
-  const metadata = await fetchPaperMetadata("2301.07041", async (url) => ({
-    ok: url.endsWith("/2301.07041"),
-    text: async () =>
-      '<meta name="citation_title" content="A Test Paper">',
-  }));
+  const metadata = await fetchPaperMetadata("2301.07041", {
+    fetchImpl: async (url) => ({
+      ok: url.endsWith("/2301.07041"),
+      text: async () =>
+        '<meta name="citation_title" content="A Test Paper">',
+    }),
+    retryDelayMs: 0,
+  });
   assert.equal(metadata.title, "A Test Paper");
+});
+
+test("parses metadata returned by the ArXiv Atom API", () => {
+  const xml = `
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <entry>
+        <title>API &amp; Fallback</title>
+        <published>2024-07-03T00:00:00Z</published>
+        <author><name>Grace Hopper</name></author>
+        <author><name>Donald Knuth</name></author>
+        <category term="cs.SE"/>
+      </entry>
+    </feed>
+  `;
+  assert.deepEqual(parseMetadataFromAtom(xml, "2407.00001"), {
+    title: "API & Fallback",
+    authors: ["Grace Hopper", "Donald Knuth"],
+    category: "cs.SE",
+    year: "2024",
+    month: "07",
+    arxivId: "2407.00001",
+  });
+});
+
+test("falls back to the Atom API when the abstract page fails", async () => {
+  const requestedUrls = [];
+  const metadata = await fetchPaperMetadata("2407.00001", {
+    attempts: 1,
+    apiDelayMs: 0,
+    fetchImpl: async (url) => {
+      requestedUrls.push(url);
+      if (url.includes("/abs/")) return { ok: false, status: 503 };
+      return {
+        ok: true,
+        text: async () => `
+          <feed><entry><title>Fallback Paper</title>
+          <published>2024-07-01</published></entry></feed>
+        `,
+      };
+    },
+  });
+
+  assert.equal(metadata.title, "Fallback Paper");
+  assert.equal(requestedUrls.length, 2);
+  assert.match(requestedUrls[1], /export\.arxiv\.org/);
+});
+
+test("retries a transient abstract page failure", async () => {
+  let attempts = 0;
+  const metadata = await fetchPaperMetadata("2407.00001", {
+    attempts: 2,
+    retryDelayMs: 0,
+    fetchImpl: async () => {
+      attempts += 1;
+      if (attempts === 1) return { ok: false, status: 500 };
+      return {
+        ok: true,
+        text: async () =>
+          '<meta name="citation_title" content="Recovered Paper">',
+      };
+    },
+  });
+
+  assert.equal(metadata.title, "Recovered Paper");
+  assert.equal(attempts, 2);
 });

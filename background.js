@@ -1,8 +1,8 @@
 import {
-  fetchPaperMetadata,
   getPdfUrl,
   parseArxivUrl,
 } from "./lib/arxiv.js";
+import { getPaperMetadata } from "./lib/metadata-cache.js";
 import {
   DEFAULT_TEMPLATE,
   buildFilename,
@@ -40,7 +40,7 @@ async function downloadArxivUrl(url, options = {}) {
   const parsed = parseArxivUrl(url);
   if (!parsed) throw new Error("This is not a supported ArXiv paper URL.");
 
-  const metadata = await fetchPaperMetadata(parsed.id);
+  const metadata = await getPaperMetadata(parsed.id);
   const template = await getStoredTemplate();
   return startDownload(
     getPdfUrl(parsed.id),

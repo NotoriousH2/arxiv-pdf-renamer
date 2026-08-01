@@ -8,8 +8,8 @@ import {
 import {
   extractDateFromId,
   parseArxivUrl,
-  parseMetadataFromHtml,
 } from "./lib/arxiv.js";
+import { getPaperMetadata } from "./lib/metadata-cache.js";
 import {
   buildBatchCandidates,
   selectBatchItems,
@@ -176,16 +176,6 @@ import {
     };
   }
 
-  async function fetchMetadataFromAbsPage(absUrl) {
-    const response = await fetch(absUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch abstract page (HTTP ${response.status}).`);
-    }
-    const html = await response.text();
-    const parsed = parseArxivUrl(absUrl);
-    return parseMetadataFromHtml(html, parsed.id);
-  }
-
   async function extractBatchCandidatesFromPage(tabId) {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
@@ -317,12 +307,24 @@ import {
     const baseId = parsed.id.replace(/v\d+$/, "");
     pdfUrl = `https://arxiv.org/pdf/${baseId}.pdf`;
     const paperDate = extractDateFromId(parsed.id);
-    const extractedMetadata =
-      parsed.type === "abs"
-        ? await extractMetadataFromAbsPage(tab.id)
-        : await fetchMetadataFromAbsPage(
-            `https://arxiv.org/abs/${parsed.id}`
-          );
+    let extractedMetadata;
+    if (parsed.type === "abs") {
+      try {
+        extractedMetadata = await extractMetadataFromAbsPage(tab.id);
+      } catch {
+        extractedMetadata = await getPaperMetadata(parsed.id);
+      }
+    } else {
+      extractedMetadata = await getPaperMetadata(parsed.id);
+    }
+
+    if (!extractedMetadata.authors?.length) {
+      try {
+        extractedMetadata = await getPaperMetadata(parsed.id);
+      } catch {
+        // Keep usable page metadata when optional author enrichment fails.
+      }
+    }
 
     paperMetadata = {
       ...extractedMetadata,
