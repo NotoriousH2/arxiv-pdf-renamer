@@ -8,18 +8,20 @@ When downloading papers from ArXiv, files are saved with their ID as the filenam
 
 ## Features
 
-- Automatically extracts paper title from ArXiv abs/pdf pages
-- Downloads PDF using the title as the filename
-- **Date prefix support**: Prepend publication date in `[YYYY.MM]` or `[YY.MM]` format (e.g., `[2023.01] Attention Is All You Need.pdf`)
-- Prefix preference is saved automatically and persists across sessions
+- **Filename templates**: Combine title, authors, date, ArXiv ID, and category
+- **Quick downloads**: Use page/link context menus or `Alt+Shift+D`
+- **Batch downloads**: Select and download up to 50 papers from listing pages
+- **Reliable metadata**: Fall back to the official ArXiv API automatically
+- **Version and history management**: Choose current/latest versions and duplicate behavior
+- **Remembered folder**: Save directly to a user-approved directory
 - Supports modern format (`2301.07041`) and legacy format (`hep-th/9901001`)
-- Handles versioned URLs (`2301.07041v2`)
+- Stores preferences and metadata cache locally in the browser
 
 ## Installation
 
 1. Clone this repository:
    ```
-   git clone https://github.com/YOUR_USERNAME/arxiv-pdf-renamer.git
+   git clone https://github.com/NotoriousH2/arxiv-pdf-renamer.git
    ```
 2. Open `chrome://extensions` in Chrome.
 3. Enable **Developer mode** in the top right corner.
@@ -31,11 +33,18 @@ When downloading papers from ArXiv, files are saved with their ID as the filenam
 1. Navigate to an ArXiv paper page (abs or pdf).
 2. Click the ArXiv PDF Renamer icon in the browser toolbar.
 3. The paper title is automatically displayed.
-4. Choose a date prefix format from the **Date Prefix** dropdown:
-   - `[YYYY.MM]` — e.g., `[2023.01] Paper Title.pdf` (default)
-   - `[YY.MM]` — e.g., `[23.01] Paper Title.pdf`
-   - `None` — title only, no date prefix
-5. Click **Download PDF** to save the file with the selected filename format.
+4. Choose the PDF version, duplicate behavior, save location, and filename format.
+5. Click **Download PDF**.
+
+Custom templates support `{title}`, `{firstAuthor}`, `{authors}`, `{year}`,
+`{year2}`, `{month}`, `{arxivId}`, and `{category}`. Configure a fixed save
+folder with **Choose Folder** in the extension settings. On a page containing
+multiple ArXiv links, open the extension to select papers for a batch download.
+
+## Development and Testing
+
+No build step is required. Run `npm test` for unit tests and `npm run check`
+for JavaScript syntax validation.
 
 ## Supported URL Formats
 

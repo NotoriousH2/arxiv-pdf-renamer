@@ -40,6 +40,20 @@
       </div>
 
       <div class="template-row">
+        <label for="save-mode-select">Save Location</label>
+        <select id="save-mode-select">
+          <option value="ask">Ask where to save</option>
+          <option value="folder">Use remembered folder</option>
+        </select>
+        <div class="save-location-line">
+          <span id="save-location-status">Chrome download location</span>
+          <button id="folder-settings-btn" class="small-button" type="button">
+            Configure
+          </button>
+        </div>
+      </div>
+
+      <div class="template-row">
         <label for="template-select">Filename Format</label>
         <select id="template-select">
           <option value="default">[YYYY.MM] Title</option>

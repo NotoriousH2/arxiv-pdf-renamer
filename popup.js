@@ -7,6 +7,7 @@ import {
 } from "./lib/filename.js";
 import {
   extractDateFromId,
+  fetchWithRetry,
   getPdfUrl,
   parseArxivUrl,
 } from "./lib/arxiv.js";
@@ -23,6 +24,14 @@ import {
   resolveDownloadId,
   splitArxivId,
 } from "./lib/history.js";
+import {
+  SAVE_MODE_ASK,
+  SAVE_MODE_FOLDER,
+  SAVE_MODE_KEY,
+  getDirectoryHandle,
+  saveResponseToDirectory,
+  verifyDirectoryPermission,
+} from "./lib/file-store.js";
 
 (async function () {
   const loadingEl = document.getElementById("loading");
@@ -37,6 +46,11 @@ import {
     "current-version-option"
   );
   const conflictSelect = document.getElementById("conflict-select");
+  const saveModeSelect = document.getElementById("save-mode-select");
+  const saveLocationStatus = document.getElementById(
+    "save-location-status"
+  );
+  const folderSettingsBtn = document.getElementById("folder-settings-btn");
   const downloadBtn = document.getElementById("download-btn");
   const templateSelect = document.getElementById("template-select");
   const customTemplateRow = document.getElementById("custom-template-row");
@@ -57,6 +71,7 @@ import {
   let paperMetadata = null;
   let parsedPaper = null;
   let batchCandidates = [];
+  let savedDirectoryHandle = null;
 
   function showError(message) {
     loadingEl.classList.add("hidden");
@@ -180,6 +195,19 @@ import {
       `Previously ${stateText}: ${versionText} on ${date}`;
   }
 
+  async function refreshSaveLocation() {
+    try {
+      savedDirectoryHandle = await getDirectoryHandle();
+    } catch {
+      savedDirectoryHandle = null;
+    }
+
+    saveLocationStatus.textContent =
+      saveModeSelect.value === SAVE_MODE_FOLDER
+        ? savedDirectoryHandle?.name || "No folder selected"
+        : "Chrome save dialog";
+  }
+
   async function extractMetadataFromAbsPage(tabId) {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
@@ -271,6 +299,23 @@ import {
     });
   });
 
+  saveModeSelect.addEventListener("change", async () => {
+    await chrome.storage.local.set({
+      [SAVE_MODE_KEY]: saveModeSelect.value,
+    });
+    await refreshSaveLocation();
+    if (
+      saveModeSelect.value === SAVE_MODE_FOLDER &&
+      !savedDirectoryHandle
+    ) {
+      await chrome.runtime.openOptionsPage();
+    }
+  });
+
+  folderSettingsBtn.addEventListener("click", () => {
+    chrome.runtime.openOptionsPage();
+  });
+
   batchSelectAll.addEventListener("change", () => {
     for (const checkbox of batchList.querySelectorAll(
       'input[type="checkbox"]'
@@ -320,12 +365,49 @@ import {
     );
   });
 
-  downloadBtn.addEventListener("click", () => {
+  downloadBtn.addEventListener("click", async () => {
     if (!pdfUrl || !paperMetadata || downloadBtn.disabled) return;
 
     const filename = buildFilename(paperMetadata, selectedTemplate());
     downloadBtn.disabled = true;
     downloadBtn.textContent = "Starting download...";
+
+    if (saveModeSelect.value === SAVE_MODE_FOLDER) {
+      try {
+        if (!savedDirectoryHandle) {
+          throw new Error("Choose a save folder in extension settings first.");
+        }
+        if (
+          !(await verifyDirectoryPermission(savedDirectoryHandle, {
+            request: true,
+          }))
+        ) {
+          throw new Error("Write access to the saved folder was not granted.");
+        }
+
+        const response = await fetchWithRetry(pdfUrl);
+        const savedFilename = await saveResponseToDirectory(
+          savedDirectoryHandle,
+          filename,
+          response,
+          conflictSelect.value
+        );
+        await chrome.runtime.sendMessage({
+          action: "recordDirectSave",
+          filename: savedFilename,
+          arxivId: paperMetadata.arxivId,
+          requestedId: parsedPaper.id,
+          versionMode: versionSelect.value,
+        });
+        downloadBtn.textContent = "Saved to remembered folder!";
+        setTimeout(() => window.close(), 1000);
+      } catch (error) {
+        downloadBtn.disabled = false;
+        downloadBtn.textContent = "Download PDF";
+        showError(error.message || "Could not save to the selected folder.");
+      }
+      return;
+    }
 
     chrome.runtime.sendMessage(
       {
@@ -404,6 +486,7 @@ import {
       VERSION_MODE_KEY,
       CONFLICT_ACTION_KEY,
       DOWNLOAD_HISTORY_KEY,
+      SAVE_MODE_KEY,
     ]);
     const storedTemplate =
       saved[TEMPLATE_KEY] ||
@@ -421,6 +504,8 @@ import {
     );
     versionSelect.value = saved[VERSION_MODE_KEY] || "latest";
     conflictSelect.value = saved[CONFLICT_ACTION_KEY] || "uniquify";
+    saveModeSelect.value = saved[SAVE_MODE_KEY] || SAVE_MODE_ASK;
+    await refreshSaveLocation();
     const { version } = splitArxivId(parsed.id);
     currentVersionOption.textContent =
       version === null

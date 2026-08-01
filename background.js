@@ -1,4 +1,5 @@
 import {
+  fetchWithRetry,
   getPdfUrl,
   parseArxivUrl,
 } from "./lib/arxiv.js";
@@ -17,6 +18,13 @@ import {
   resolveDownloadId,
   updateHistoryRecord,
 } from "./lib/history.js";
+import {
+  SAVE_MODE_FOLDER,
+  SAVE_MODE_KEY,
+  getDirectoryHandle,
+  saveResponseToDirectory,
+  verifyDirectoryPermission,
+} from "./lib/file-store.js";
 
 const PAGE_MENU_ID = "download-arxiv-page";
 const LINK_MENU_ID = "download-arxiv-link";
@@ -29,6 +37,7 @@ async function getStoredPreferences() {
     LEGACY_PREF_KEY,
     VERSION_MODE_KEY,
     CONFLICT_ACTION_KEY,
+    SAVE_MODE_KEY,
   ]);
   return {
     template:
@@ -37,6 +46,7 @@ async function getStoredPreferences() {
       DEFAULT_TEMPLATE,
     versionMode: saved[VERSION_MODE_KEY] || "latest",
     conflictAction: saved[CONFLICT_ACTION_KEY] || "uniquify",
+    saveMode: saved[SAVE_MODE_KEY] || "ask",
   };
 }
 
@@ -50,6 +60,57 @@ function mutateHistory(mutator) {
     return history;
   });
   return historyWriteQueue;
+}
+
+async function recordCompletedSave({
+  filename,
+  arxivId,
+  requestedId,
+  versionMode,
+}) {
+  const downloadId = `folder-${crypto.randomUUID()}`;
+  const timestamp = Date.now();
+  await mutateHistory((history) =>
+    addHistoryRecord(history, {
+      downloadId,
+      filename,
+      arxivId,
+      requestedId,
+      versionMode,
+      startedAt: timestamp,
+      completedAt: timestamp,
+      state: "complete",
+      saveMethod: "folder",
+    })
+  );
+  return downloadId;
+}
+
+async function tryRememberedFolderSave(
+  url,
+  filename,
+  conflictAction,
+  historyContext
+) {
+  const directoryHandle = await getDirectoryHandle().catch(() => null);
+  if (
+    !directoryHandle ||
+    !(await verifyDirectoryPermission(directoryHandle, { request: false }))
+  ) {
+    return null;
+  }
+
+  const response = await fetchWithRetry(url);
+  const savedFilename = await saveResponseToDirectory(
+    directoryHandle,
+    filename,
+    response,
+    conflictAction
+  );
+  return recordCompletedSave({
+    filename: savedFilename,
+    ...historyContext,
+  });
 }
 
 async function startDownload(
@@ -89,17 +150,34 @@ async function downloadArxivUrl(url, options = {}) {
   const metadata = await getPaperMetadata(parsed.id);
   const preferences = await getStoredPreferences();
   const arxivId = resolveDownloadId(parsed.id, preferences.versionMode);
+  const pdfUrl = getPdfUrl(parsed.id, preferences.versionMode);
+  const filename = buildFilename(
+    { ...metadata, arxivId },
+    preferences.template
+  );
+  const historyContext = {
+    arxivId,
+    requestedId: parsed.id,
+    versionMode: preferences.versionMode,
+  };
+
+  if (preferences.saveMode === SAVE_MODE_FOLDER) {
+    const directDownloadId = await tryRememberedFolderSave(
+      pdfUrl,
+      filename,
+      preferences.conflictAction,
+      historyContext
+    );
+    if (directDownloadId) return directDownloadId;
+  }
+
   return startDownload(
-    getPdfUrl(parsed.id, preferences.versionMode),
-    buildFilename({ ...metadata, arxivId }, preferences.template),
+    pdfUrl,
+    filename,
     {
       ...options,
       conflictAction: preferences.conflictAction,
-      historyContext: {
-        arxivId,
-        requestedId: parsed.id,
-        versionMode: preferences.versionMode,
-      },
+      historyContext,
     }
   );
 }
@@ -237,6 +315,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse({
           success: false,
           error: error.message || "Batch download failed",
+        })
+      );
+    return true;
+  }
+
+  if (message.action === "recordDirectSave") {
+    recordCompletedSave(message)
+      .then((downloadId) => sendResponse({ success: true, downloadId }))
+      .catch((error) =>
+        sendResponse({
+          success: false,
+          error: error.message || "Could not record saved paper",
         })
       );
     return true;
