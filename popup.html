@@ -19,13 +19,28 @@
       <label for="title-input">Paper Title</label>
       <input type="text" id="title-input" readonly>
 
-      <div class="prefix-row">
-        <label for="prefix-select">Date Prefix</label>
-        <select id="prefix-select">
-          <option value="YYYY.MM">[YYYY.MM] (e.g. [2023.01])</option>
-          <option value="YY.MM">[YY.MM] (e.g. [23.01])</option>
-          <option value="none">None</option>
+      <div class="template-row">
+        <label for="template-select">Filename Format</label>
+        <select id="template-select">
+          <option value="default">[YYYY.MM] Title</option>
+          <option value="short">[YY.MM] Title</option>
+          <option value="title">Title only</option>
+          <option value="custom">Custom template</option>
         </select>
+      </div>
+
+      <div id="custom-template-row" class="template-row hidden">
+        <label for="custom-template">Custom Template</label>
+        <input
+          type="text"
+          id="custom-template"
+          placeholder="[{year}.{month}] {firstAuthor} - {title}"
+        >
+        <p class="token-help">
+          Tokens: {title}, {firstAuthor}, {authors}, {year}, {year2},
+          {month}, {arxivId}, {category}
+        </p>
+        <p id="template-error" class="field-error hidden"></p>
       </div>
 
       <label>Filename Preview</label>
@@ -39,6 +54,6 @@
     </div>
   </div>
 
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

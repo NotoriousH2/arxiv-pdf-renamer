@@ -76,12 +76,13 @@ label {
   margin-bottom: 12px;
 }
 
-/* Prefix select */
-.prefix-row {
+/* Filename template */
+.template-row {
   margin-bottom: 12px;
 }
 
-#prefix-select {
+#template-select,
+#custom-template {
   width: 100%;
   padding: 6px 8px;
   border: 1px solid #ddd;
@@ -90,6 +91,23 @@ label {
   background: #fff;
   color: #333;
   cursor: pointer;
+}
+
+#custom-template {
+  cursor: text;
+}
+
+.token-help {
+  margin-top: 5px;
+  color: #777;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.field-error {
+  margin-top: 5px;
+  color: #b31b1b;
+  font-size: 11px;
 }
 
 .filename-preview {
